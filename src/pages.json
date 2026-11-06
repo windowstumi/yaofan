@@ -1,0 +1,4 @@
+{
+  "pages": [{ "path": "pages/index/index", "style": { "navigationStyle": "custom", "navigationBarTitleText": "一点 · 让善意刚好发生" } }],
+  "globalStyle": { "backgroundColor": "#faf9f6", "navigationBarTextStyle": "black" }
+}

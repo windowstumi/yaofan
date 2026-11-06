@@ -1,0 +1,12 @@
+{
+  "name": "一点",
+  "appid": "__UNI__YIDIAN",
+  "description": "让善意刚好发生，发现生活中需要被接住的小小账单。",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "vueVersion": "3",
+  "uniStatistics": { "enable": false },
+  "h5": { "router": { "mode": "hash" }, "title": "一点 · 让善意刚好发生" },
+  "mp-weixin": { "appid": "", "setting": { "urlCheck": true }, "usingComponents": true }
+}

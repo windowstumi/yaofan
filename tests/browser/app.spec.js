@@ -1,0 +1,113 @@
+import { test, expect } from '@playwright/test'
+
+test.beforeEach(async ({ page }) => { await page.goto('/') })
+
+test('skip, undo, category filter and saving a story work', async ({ page }) => {
+  await expect(page.locator('.person-name')).toContainText('小林')
+  await page.locator('.skip-action').click()
+  await expect(page.locator('.person-name')).toContainText('阿泽')
+  await page.locator('.undo-action').click()
+  await expect(page.locator('.person-name')).toContainText('小林')
+  await page.locator('.bookmark-button').click()
+  await page.locator('.nav-item').filter({ hasText: '我的收藏' }).click()
+  await expect(page.locator('.saved-card')).toHaveCount(1)
+  await page.reload()
+  await page.locator('.nav-item').filter({ hasText: '我的收藏' }).click()
+  await expect(page.locator('.saved-card')).toHaveCount(1)
+  await page.locator('.nav-item').filter({ hasText: '发现账单' }).click()
+  await page.locator('.category-button').filter({ hasText: '学习成长' }).click()
+  await expect(page.locator('.person-name')).toContainText('小雨')
+  await page.locator('.filter-button').click()
+  await page.locator('.filter-options').first().getByText('100 元以内', { exact: true }).click()
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.person-name')).toContainText('小雨')
+})
+
+test('help validates the amount, updates totals and persists the ledger', async ({ page }) => {
+  await page.locator('.help-action').click()
+  const input = page.locator('.amount-input-wrap input')
+  await input.fill('999')
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.form-error')).toBeVisible()
+  await input.fill('10')
+  await expect(page.locator('.modal .primary-button')).toContainText('¥10.00')
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.modal-title')).toContainText('你的善意，已被接住')
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.card-amount')).toContainText('70.00')
+  await page.locator('.nav-item').filter({ hasText: '我的帮助' }).click()
+  await expect(page.locator('.history-row')).toHaveCount(1)
+  await expect(page.locator('.history-amount')).toHaveText('¥10.00')
+  await page.reload()
+  await expect(page.locator('.card-amount')).toContainText('70.00')
+  await page.locator('.nav-item').filter({ hasText: '我的帮助' }).click()
+  await expect(page.locator('.history-row')).toHaveCount(1)
+})
+
+test('full help advances to the next story', async ({ page }) => {
+  await page.locator('.help-action').click()
+  await page.locator('.modal .primary-button').click()
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.person-name')).toContainText('阿泽')
+})
+
+test('publication requires consent and creates a locally saved bill', async ({ page }) => {
+  await page.locator('.publish-button').click()
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.form-error')).toBeVisible()
+  await page.locator('.form-input input').nth(0).fill('一个认真生活的故事')
+  await page.locator('.form-input input').nth(1).fill('复习资料')
+  await page.locator('.form-input input').nth(2).fill('68.50')
+  await page.locator('.form-textarea textarea').fill('我想买一份学习资料，谢谢愿意帮助我的人。')
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.form-error')).toContainText('请确认账单真实')
+  await page.locator('.agreement-row').click()
+  await expect(page.locator('.checkbox')).toHaveClass(/checked/)
+  await page.locator('.modal .primary-button').click()
+  await expect(page.locator('.history-title')).toContainText('复习资料')
+  await page.reload()
+  await page.locator('.nav-item').filter({ hasText: '个人中心' }).click()
+  await expect(page.locator('.history-title')).toContainText('复习资料')
+})
+
+test('mobile has no horizontal overflow and swipes work', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.mobile-nav')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  const card = await page.locator('.story-card').boundingBox()
+  await page.mouse.move(card.x + card.width * .7, card.y + 100)
+  await page.mouse.down()
+  await page.mouse.move(card.x + card.width * .2, card.y + 100, { steps: 8 })
+  await page.mouse.up()
+  await expect(page.locator('.person-name')).toContainText('阿泽')
+  await page.locator('.mobile-nav > uni-button').filter({ hasText: '我的帮助' }).click()
+  await expect(page.locator('.empty-title')).toContainText('你的第一份善意')
+})
+
+test('mobile pinch and double tap keep page scale while single-finger scrolling works', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  try {
+    const page = await context.newPage()
+    await page.goto('http://localhost:5173/')
+    await expect(page.locator('.story-card')).toBeVisible()
+    const session = await context.newCDPSession(page)
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 145, y: 450, id: 0 }, { x: 245, y: 450, id: 1 }] })
+    for (let step = 1; step <= 10; step++) {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 145 - step * 5, y: 450, id: 0 }, { x: 245 + step * 5, y: 450, id: 1 }] })
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect.poll(() => page.evaluate(() => window.visualViewport.scale)).toBe(1)
+    await expect(page.locator('.person-name')).toContainText('小林')
+    await expect(page.locator('.modal-overlay')).toHaveCount(0)
+    await session.send('Input.synthesizeTapGesture', { x: 195, y: 200, tapCount: 2, gestureSourceType: 'touch' })
+    await expect.poll(() => page.evaluate(() => window.visualViewport.scale)).toBe(1)
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 375, y: 650 }] })
+    for (let step = 1; step <= 15; step++) {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 375, y: 650 - step * 20 }] })
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+  } finally {
+    await context.close()
+  }
+})
